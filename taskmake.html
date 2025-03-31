@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>英文段落翻译助手</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+        }
+        #inputText {
+            width: 80%;
+            height: 150px;
+            margin: 10px;
+            padding: 10px;
+        }
+        #generateBtn, #exportBtn, #previewBtn, #adminBtn {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #result {
+            margin-top: 20px;
+            text-align: left;
+            white-space: pre-line;
+            line-height: 1.8;
+        }
+        /* 添加词库管理模块的样式 */
+        .dictionary-manager {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px dashed #ccc;
+            text-align: left;
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        .input-group input {
+            width: 80%;
+            padding: 8px;
+            margin-top: 5px;
+            display: block;
+        }
+        #addWordBtn {
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>请输入本次训练任务的标题：</h3>
+        <input type="text" id="taskTitle" style="width: 80%; padding: 8px; margin: 10px;">
+        <h3>请提供英文段落或句子：</h3>
+        <textarea id="inputText"></textarea><br>
+        <button id="previewBtn">预览任务</button>
+        <button id="generateBtn">确定生成</button>
+        <button id="exportBtn">导出词库</button>
+        <button id="adminBtn">进入管理</button>
+        <div id="result"></div>
+        <div class="dictionary-manager">
+            <h3>词库管理</h3>
+            <div class="input-group">
+                <label>请输入英文单词或短语：</label>
+                <input type="text" id="englishInput" placeholder="输入英文...">
+            </div>
+            <div class="input-group">
+                <label>请输入中文释义：</label>
+                <input type="text" id="chineseInput" placeholder="输入中文...">
+            </div>
+            <button id="addWordBtn">确认添加</button>
+        </div>
+    </div>
+
+    <script src="dictionary.js"></script>
+    <script>
+        // 初始化并合并自定义词库
+        const customDictionary = JSON.parse(localStorage.getItem('customDictionary') || '{}');
+        Object.assign(dictionary, customDictionary);
+
+        // 抽取翻译逻辑为独立函数
+        function translateText(inputText) {
+            const lines = inputText.split('\n');
+            let fullResult = '';
+
+            lines.forEach(line => {
+                // 分割单词时保留标点符号
+                const words = line.match(/[\w']+|[.,!?;]/g) || [];
+                let englishLine = '';
+                let chineseLine = '';
+                
+                // 尝试寻找最长匹配的词组
+                for (let i = 0; i < words.length; i++) {
+                    if (/[.,!?;]/.test(words[i])) {
+                        englishLine += words[i] + ' ';
+                        chineseLine += words[i] + ' ';
+                        continue;
+                    }
+
+                    // 尝试从当前位置开始匹配最长的词组
+                    let matched = false;
+                    for (let j = Math.min(words.length - i, 5); j > 0; j--) {
+                        const phrase = words.slice(i, i + j).join(' ').toLowerCase(); // 确保全部小写
+                        if (dictionary[phrase]) {
+                            const originalPhrase = words.slice(i, i + j).join(' ');
+                            const translation = dictionary[phrase];
+                            englishLine += originalPhrase + ' ';
+                            const padding = ' '.repeat(Math.max(0, originalPhrase.length - translation.length));
+                            chineseLine += translation + padding + ' ';
+                            i += j - 1;
+                            matched = true;
+                            break;
+                        }
+                    }
+
+                    // 如果没有匹配到词组，则处理单个单词
+                    if (!matched) {
+                        const word = words[i];
+                        const wordLength = word.length;
+                        const lowerWord = word.toLowerCase();  // 确保全部小写
+                        
+                        englishLine += word + ' ';
+                        
+                        if (dictionary[lowerWord]) {  // 使用小写形式查找词典
+                            const translation = dictionary[lowerWord];
+                            const padding = ' '.repeat(Math.max(0, wordLength - translation.length));
+                            chineseLine += translation + padding + ' ';
+                        } else {
+                            chineseLine += word + ' ';  // 如果找不到翻译，保持原词
+                        }
+                    }
+                }
+
+                fullResult += englishLine + '\n' + chineseLine + '\n\n';
+            });
+
+            return fullResult.trim();
+        }
+
+        // 修改生成按钮处理函数
+        document.getElementById('generateBtn').addEventListener('click', function() {
+            const taskTitle = document.getElementById('taskTitle').value.trim();
+            if (!taskTitle) {
+                alert('请输入训练任务标题');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('result');
+            const inputText = document.getElementById('inputText').value.trim();
+            if (!inputText) {
+                resultDiv.textContent = '请输入需要翻译的内容';
+                return;
+            }
+
+            const fullResult = translateText(inputText);
+            resultDiv.textContent = fullResult;
+
+            // 准备新任务数据
+            const newSession = {
+                title: taskTitle,
+                content: fullResult,
+                timestamp: new Date().toISOString()
+            };
+
+            // 从 localStorage 加载现有任务数据
+            let existingData = JSON.parse(localStorage.getItem('trainingData') || '{"sessions":[]}');
+            
+            // 添加新任务到数组开头
+            existingData.sessions.unshift(newSession);
+            
+            // 保存回 localStorage
+            localStorage.setItem('trainingData', JSON.stringify(existingData));
+            
+            // 更新全局变量
+            window.trainingData = existingData;
+
+            // 修改处理代码中的路径
+            const trainingWindow = window.open('./translatetraining.html', '_blank');
+            setTimeout(() => {
+                try {
+                    trainingWindow.postMessage({
+                        type: 'translation',
+                        title: taskTitle,
+                        content: fullResult
+                    }, '*');
+                } catch (e) {
+                    console.error('发送数据失败:', e);
+                    alert('训练页面加载失败，请重试');
+                }
+            }, 1000);
+        });
+
+        // 添加预览按钮处理
+        document.getElementById('previewBtn').addEventListener('click', function() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = '正在处理...';
+            
+            const inputText = document.getElementById('inputText').value.trim();
+            if (!inputText) {
+                resultDiv.textContent = '请输入需要翻译的内容';
+                return;
+            }
+
+            const fullResult = translateText(inputText);
+            resultDiv.textContent = fullResult;
+        });
+
+        // 添加进入管理按钮处理
+        document.getElementById('adminBtn').addEventListener('click', function() {
+            window.location.href = './admin.html';
+        });
+
+        // 添加导出词库功能
+        document.getElementById('exportBtn').addEventListener('click', function() {
+            const sortedEntries = Object.entries(dictionary)
+                .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
+            
+            const csvContent = sortedEntries
+                .map(([en, zh]) => `${en},${zh}`)
+                .join('\n');
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'dictionary.csv';
+            link.click();
+            URL.revokeObjectURL(link.href);
+        });
+
+        // 添加词库管理功能
+        document.getElementById('addWordBtn').addEventListener('click', function() {
+            const english = document.getElementById('englishInput').value.trim().toLowerCase();
+            const chinese = document.getElementById('chineseInput').value.trim();
+            
+            if (!english || !chinese) {
+                alert('请填写完整的英文和中文内容');
+                return;
+            }
+
+            // 尝试连接本地服务器
+            fetch('http://localhost:3001/add-word', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ english, chinese })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('添加成功！');
+                    document.getElementById('englishInput').value = '';
+                    document.getElementById('chineseInput').value = '';
+                    location.reload();
+                } else {
+                    throw new Error(data.error || '添加失败');
+                }
+            })
+            .catch(error => {
+                console.log('本地服务器未运行，使用localStorage存储');
+                // 更新自定义词库
+                const updatedCustomDict = JSON.parse(localStorage.getItem('customDictionary') || '{}');
+                updatedCustomDict[english] = chinese;
+                localStorage.setItem('customDictionary', JSON.stringify(updatedCustomDict));
+                
+                // 更新当前内存中的词典
+                dictionary[english] = chinese;
+                
+                alert('添加成功！(已保存到浏览器本地存储)');
+                document.getElementById('englishInput').value = '';
+                document.getElementById('chineseInput').value = '';
+            });
+        });
+    </script>
+</body>
+</html>

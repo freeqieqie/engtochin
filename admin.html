@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>训练系统后台管理</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f2eb;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            color: #333;
+        }
+        .back-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .back-btn:hover {
+            background-color: #45a049;
+        }
+        .content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .task-management {
+            display: flex;
+            gap: 20px;
+        }
+        .task-list {
+            flex: 1;
+        }
+        .task-actions {
+            width: 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .action-btn {
+            padding: 10px;
+            font-size: 14px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .action-btn:hover {
+            background-color: #45a049;
+        }
+        .action-btn.delete {
+            background-color: #f44336;
+        }
+        .action-btn.delete:hover {
+            background-color: #da190b;
+        }
+        select {
+            width: 100%;
+            height: 300px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;  /* 添加字体大小设置 */
+        }
+        .search-box {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .records-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .records-table-container {
+            max-height: 500px;  /* 设置最大高度 */
+            overflow-y: auto;   /* 启用垂直滚动 */
+        }
+        
+        .records-table tbody tr.selected {
+            background-color: #e3f2fd;  /* 选中行的背景色 */
+        }
+        
+        /* 自定义右键菜单样式 */
+        .context-menu {
+            position: fixed;
+            background: white;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            padding: 5px 0;
+            z-index: 1000;
+        }
+        
+        .context-menu-item {
+            padding: 8px 20px;
+            cursor: pointer;
+        }
+        
+        .context-menu-item:hover {
+            background-color: #f0f0f0;
+        }
+        .records-table th {
+            padding: 10px;
+            background: #f5f5f5;
+            cursor: pointer;
+            text-align: left;
+        }
+        .records-table th:hover {
+            background: #e0e0e0;
+        }
+        .records-table td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .records-table tr:hover {
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>训练系统后台管理</h1>
+        <button class="back-btn" onclick="window.location.href='./taskmake.html'">返回</button>
+    </div>
+    <div class="content">
+        <!-- 任务管理区域 -->
+        <div class="section">
+            <h2>任务管理</h2>
+            <div class="task-management">
+                <div class="task-list">
+                    <select id="taskSelect" size="10" multiple></select>
+                </div>
+                <div class="task-actions">
+                    <button class="action-btn" onclick="viewTask()">查看任务</button>
+                    <button class="action-btn delete" onclick="deleteTask()">删除任务</button>
+                    <button class="action-btn" onclick="window.location.href='./taskmake.html'">新增任务</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 学生记录管理区域 -->
+        <div class="section">
+            <h2>学生记录管理</h2>
+            <input type="text" class="search-box" id="searchBox" placeholder="搜索...">
+            <div class="records-table-container">
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th onclick="sortRecords('student')">学生姓名</th>
+                            <th onclick="sortRecords('taskTitle')">任务标题</th>
+                            <th onclick="sortRecords('timestamp')">完成时间</th>
+                            <th onclick="sortRecords('timeUsed')">用时(秒)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recordsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="./data_training.js"></script>
+    <script src="./data_student.js"></script>
+    <script>
+        let currentSortField = '';
+        let isAscending = true;
+        let selectedRows = new Set(); // 存储选中的行的索引
+        let lastSelectedIndex = -1;   // 记录最后一次选中的行索引
+        
+        // 添加基础路径判断
+        const baseUrl = window.location.href.includes('/engtochin/') ? '/engtochin/' : './';
+
+        // 初始化任务列表
+        function updateTaskList() {
+            const taskSelect = document.getElementById('taskSelect');
+            taskSelect.innerHTML = '';
+            
+            if (trainingData.sessions) {
+                trainingData.sessions.forEach((session, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = session.title;
+                    taskSelect.appendChild(option);
+                });
+            }
+        }
+
+        // 修改查看任务函数，只允许查看单个任务
+        function viewTask() {
+            const taskSelect = document.getElementById('taskSelect');
+            const selectedOptions = Array.from(taskSelect.selectedOptions);
+            
+            if (selectedOptions.length === 0) {
+                alert('请选择要查看的任务');
+                return;
+            }
+
+            if (selectedOptions.length > 1) {
+                alert('请只选择一个任务');
+                return;
+            }
+
+            const selectedTask = trainingData.sessions[selectedOptions[0].value];
+            const trainingWindow = window.open(baseUrl + 'translatetraining.html', '_blank');
+            setTimeout(() => {
+                trainingWindow.postMessage({
+                    type: 'translation',
+                    title: selectedTask.title,
+                    content: selectedTask.content,
+                    student: '管理员',
+                    isExisting: true
+                }, '*');
+            }, 1000);
+        }
+
+        // 修改删除任务函数支持多选
+        function deleteTask() {
+            const taskSelect = document.getElementById('taskSelect');
+            const selectedOptions = Array.from(taskSelect.selectedOptions);
+            
+            if (selectedOptions.length === 0) {
+                alert('请选择要删除的任务');
+                return;
+            }
+
+            if (confirm(`确定要删除这${selectedOptions.length}个任务吗？`)) {
+                // 将选中的索引转换为数组并降序排序，避免删除时索引变化
+                const indexesToDelete = selectedOptions
+                    .map(option => Number(option.value))
+                    .sort((a, b) => b - a);
+                
+                // 从后向前删除
+                indexesToDelete.forEach(index => {
+                    trainingData.sessions.splice(index, 1);
+                });
+                
+                localStorage.setItem('trainingData', JSON.stringify(trainingData));
+                updateTaskList();
+            }
+        }
+
+        // 修改更新记录表格函数
+        function updateRecordsTable(records = studentData.records) {
+            const tbody = document.getElementById('recordsTableBody');
+            tbody.innerHTML = '';
+            
+            records.slice(0, 20).forEach((record, index) => {
+                const tr = document.createElement('tr');
+                // 使用可编程方式添加单元格，而不是使用innerHTML
+                const cells = [
+                    record.student,
+                    record.taskTitle,
+                    new Date(record.timestamp).toLocaleDateString(),
+                    record.timeUsed
+                ];
+                
+                cells.forEach(cellText => {
+                    const td = document.createElement('td');
+                    td.textContent = cellText;
+                    td.style.userSelect = 'none'; // 禁止文本选择
+                    tr.appendChild(td);
+                });
+                
+                // 设置表格行的属性
+                tr.style.cursor = 'default';
+                tr.style.userSelect = 'none';
+                
+                // 添加左键点击事件
+                tr.addEventListener('mousedown', (e) => {
+                    if (e.button === 0) { // 左键点击
+                        e.preventDefault();
+                        handleRowSelection(e, index);
+                    }
+                });
+                
+                // 添加右键点击事件
+                tr.addEventListener('contextmenu', (e) => {
+                    e.preventDefault(); // 阻止默认右键菜单
+                    e.stopPropagation(); // 阻止事件冒泡
+                    
+                    // 处理选中状态
+                    if (!selectedRows.has(index)) {
+                        selectedRows.clear();
+                        Array.from(tbody.getElementsByTagName('tr')).forEach(row => 
+                            row.classList.remove('selected'));
+                        selectedRows.add(index);
+                        tr.classList.add('selected');
+                    }
+                    
+                    // 显示自定义右键菜单
+                    showContextMenu(e);
+                });
+                
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 排序记录
+        function sortRecords(field) {
+            if (currentSortField === field) {
+                isAscending = !isAscending;
+            } else {
+                currentSortField = field;
+                isAscending = true;
+            }
+
+            const records = [...studentData.records];
+            records.sort((a, b) => {
+                let valueA = a[field];
+                let valueB = b[field];
+                
+                if (field === 'timestamp') {
+                    valueA = new Date(valueA);
+                    valueB = new Date(valueB);
+                }
+                
+                if (valueA < valueB) return isAscending ? -1 : 1;
+                if (valueA > valueB) return isAscending ? 1 : -1;
+                return 0;
+            });
+
+            updateRecordsTable(records);
+        }
+
+        // 搜索功能
+        document.getElementById('searchBox').addEventListener('input', function(e) {
+            const searchText = e.target.value.toLowerCase();
+            const filteredRecords = studentData.records.filter(record => 
+                record.student.toLowerCase().includes(searchText) ||
+                record.taskTitle.toLowerCase().includes(searchText) ||
+                new Date(record.timestamp).toLocaleString().toLowerCase().includes(searchText) ||
+                record.timeUsed.toString().includes(searchText)
+            );
+            updateRecordsTable(filteredRecords);
+        });
+
+        // 处理行选择
+        function handleRowSelection(event, index) {
+            event.preventDefault(); // 阻止浏览器默认行为
+            
+            const tbody = document.getElementById('recordsTableBody');
+            const rows = tbody.getElementsByTagName('tr');
+            
+            if (event.ctrlKey) {
+                // Ctrl + 点击实现多选
+                if (selectedRows.has(index)) {
+                    selectedRows.delete(index);
+                    rows[index].classList.remove('selected');
+                } else {
+                    selectedRows.add(index);
+                    rows[index].classList.add('selected');
+                }
+            } else if (event.shiftKey && lastSelectedIndex !== -1) {
+                // Shift + 点击实现连续多选
+                const start = Math.min(lastSelectedIndex, index);
+                const end = Math.max(lastSelectedIndex, index);
+                
+                selectedRows.clear();
+                Array.from(rows).forEach(row => row.classList.remove('selected'));
+                
+                for (let i = start; i <= end; i++) {
+                    selectedRows.add(i);
+                    rows[i].classList.add('selected');
+                }
+            } else {
+                // 普通点击实现单选
+                selectedRows.clear();
+                Array.from(rows).forEach(row => row.classList.remove('selected'));
+                selectedRows.add(index);
+                rows[index].classList.add('selected');
+            }
+            
+            lastSelectedIndex = index;
+        }
+
+        // 修改显示右键菜单函数
+        function showContextMenu(event) {
+            const oldMenu = document.querySelector('.context-menu');
+            if (oldMenu) oldMenu.remove();
+            
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            menu.innerHTML = `<div class="context-menu-item" onclick="deleteSelectedRecords()">删除选中记录</div>`;
+            
+            // 计算菜单位置 - 在鼠标位置右侧5像素处
+            const menuX = event.clientX + 5;  // 鼠标X坐标右移5像素
+            const menuY = event.clientY;      // 保持与鼠标Y坐标一致
+            
+            // 确保菜单不会超出窗口
+            const safeX = Math.min(menuX, window.innerWidth - menu.offsetWidth - 20);
+            const safeY = Math.min(menuY, window.innerHeight - 50);
+            
+            // 使用固定定位，相对于视口
+            menu.style.position = 'fixed';
+            menu.style.left = `${safeX}px`;
+            menu.style.top = `${safeY}px`;
+            
+            document.body.appendChild(menu);
+            
+            // 点击任意位置关闭菜单
+            const closeMenu = (e) => {
+                if (!menu.contains(e.target)) {
+                    menu.remove();
+                    document.removeEventListener('mousedown', closeMenu);
+                }
+            };
+            
+            setTimeout(() => {
+                document.addEventListener('mousedown', closeMenu);
+            }, 0);
+        }
+
+        // 删除选中的记录
+        function deleteSelectedRecords() {
+            if (selectedRows.size === 0) return;
+            
+            // 先移除右键菜单
+            const menu = document.querySelector('.context-menu');
+            if (menu) menu.remove();
+            
+            // 然后显示确认对话框
+            if (confirm(`确定要删除${selectedRows.size}条记录吗？`)) {
+                // 执行删除操作
+                const indexesToDelete = Array.from(selectedRows).sort((a, b) => b - a);
+                
+                indexesToDelete.forEach(index => {
+                    studentData.records.splice(index, 1);
+                });
+                
+                localStorage.setItem('studentData', JSON.stringify(studentData));
+                
+                selectedRows.clear();
+                lastSelectedIndex = -1;
+                updateRecordsTable();
+            }
+        }
+
+        // 修改清除选中的处理
+        document.addEventListener('mousedown', (e) => {
+            if (!e.target.closest('.records-table') && !e.target.closest('.context-menu')) {
+                selectedRows.clear();
+                lastSelectedIndex = -1;
+                const rows = document.querySelectorAll('.records-table tr');
+                rows.forEach(row => row.classList.remove('selected'));
+            }
+        });
+
+        // 初始化页面
+        updateTaskList();
+        updateRecordsTable();
+    </script>
+</body>
+</html>

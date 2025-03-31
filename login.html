@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>英文翻译训练系统</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f2eb;
+        }
+        .container {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+            gap: 20px;
+        }
+        .left-panel, .right-panel {
+            flex: 1;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .input-section {
+            margin-bottom: 20px;
+        }
+        #studentName {
+            width: 100%;
+            padding: 8px;
+            margin-top: 8px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        select {
+            width: 100%;
+            height: 300px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;  /* 设置下拉列表的字体大小为16px */
+        }
+        #loginBtn {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #loginBtn:hover {
+            background-color: #45a049;
+        }
+        h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .disabled {
+            background-color: #cccccc !important;
+            cursor: not-allowed !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left-panel">
+            <div class="input-section">
+                <h3>请输入学生姓名：</h3>
+                <input type="text" id="studentName" placeholder="输入姓名后按回车添加">
+            </div>
+            <select id="studentList" size="10">
+            </select>
+            <button id="loginBtn" class="disabled">登录</button>
+        </div>
+        <div class="right-panel">
+            <h3>训练任务列表</h3>
+            <select id="taskList" size="10">
+            </select>
+        </div>
+    </div>
+
+    <script src="data_training.js"></script>
+    <script>
+        // 初始化学生列表
+        let students = JSON.parse(localStorage.getItem('students') || '[]');
+        const studentList = document.getElementById('studentList');
+        const taskList = document.getElementById('taskList');
+        const loginBtn = document.getElementById('loginBtn');
+
+        // 添加基础路径判断
+        const baseUrl = window.location.href.includes('/engtochin/') ? '/engtochin/' : './';
+
+        // 更新学生列表显示
+        function updateStudentList() {
+            studentList.innerHTML = '';
+            students.forEach(student => {
+                const option = document.createElement('option');
+                option.value = student;
+                option.textContent = student;
+                studentList.appendChild(option);
+            });
+        }
+
+        // 更新任务列表显示
+        function updateTaskList() {
+            taskList.innerHTML = '';
+            if (trainingData.sessions) {
+                trainingData.sessions.forEach((session, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    // 只显示日期，不显示具体时间
+                    const date = new Date(session.timestamp).toLocaleDateString();
+                    option.textContent = `${session.title} (${date})`;
+                    taskList.appendChild(option);
+                });
+            }
+        }
+
+        // 处理学生姓名输入
+        document.getElementById('studentName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const name = this.value.trim();
+                if (name && !students.includes(name)) {
+                    students.push(name);
+                    localStorage.setItem('students', JSON.stringify(students));
+                    updateStudentList();
+                    this.value = '';
+                }
+            }
+        });
+
+        // 检查选择状态并更新登录按钮
+        function checkSelections() {
+            const studentSelected = studentList.selectedIndex !== -1;
+            const taskSelected = taskList.selectedIndex !== -1;
+            
+            if (studentSelected && taskSelected) {
+                loginBtn.classList.remove('disabled');
+            } else {
+                loginBtn.classList.add('disabled');
+            }
+        }
+
+        // 监听选择变化
+        studentList.addEventListener('change', checkSelections);
+        taskList.addEventListener('change', checkSelections);
+
+        // 处理登录操作
+        loginBtn.addEventListener('click', function() {
+            if (this.classList.contains('disabled')) return;
+
+            const selectedStudent = studentList.options[studentList.selectedIndex].value;
+            const selectedTaskIndex = taskList.value;
+            const selectedTask = trainingData.sessions[selectedTaskIndex];
+
+            // 存储当前学生信息
+            localStorage.setItem('currentStudent', selectedStudent);
+
+            // 在当前页面打开训练页面，并等待页面加载完成后发送消息
+            localStorage.setItem('pendingTrainingData', JSON.stringify({
+                type: 'translation',
+                title: selectedTask.title,
+                content: selectedTask.content,
+                student: selectedStudent,
+                isExisting: true
+            }));
+
+            window.location.href = baseUrl + 'translatetraining.html';
+        });
+
+        // 初始化页面
+        updateStudentList();
+        updateTaskList();
+    </script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+打开本地服务
+node server.js
+
+关闭本地服务
+ctrl+c 确定选择y
